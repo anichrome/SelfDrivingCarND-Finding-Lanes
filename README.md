@@ -1,5 +1,4 @@
 # **Finding Lane Lines on the Road** 
-[![Udacity - Self-Driving Car NanoDegree](https://s3.amazonaws.com/udacity-sdc/github/shield-carnd.svg)](http://www.udacity.com/drive)
 
 <img src="examples/laneLines_thirdPass.jpg" width="480" alt="Combined Image" />
 
@@ -8,49 +7,148 @@ Overview
 
 When we drive, we use our eyes to decide where to go.  The lines on the road that show us where the lanes are act as our constant reference for where to steer the vehicle.  Naturally, one of the first things we would like to do in developing a self-driving car is to automatically detect lane lines using an algorithm.
 
-In this project you will detect lane lines in images using Python and OpenCV.  OpenCV means "Open-Source Computer Vision", which is a package that has many useful tools for analyzing images.  
+The goals / steps of this project are the following:
+* Build a pipeline to find lane lines on the road in images
+* Use the pipeline to find lane lines on the road in video
 
-To complete the project, two files will be submitted: a file containing project code and a file containing a brief write up explaining your solution. We have included template files to be used both for the [code](https://github.com/udacity/CarND-LaneLines-P1/blob/master/P1.ipynb) and the [writeup](https://github.com/udacity/CarND-LaneLines-P1/blob/master/writeup_template.md).The code file is called P1.ipynb and the writeup template is writeup_template.md 
+### Reflection
 
-To meet specifications in the project, take a look at the requirements in the [project rubric](https://review.udacity.com/#!/rubrics/322/view)
+### 1. Describing the pipeline
 
+The pipeline to find lane lines consists of following steps:
 
-Creating a Great Writeup
----
-For this project, a great writeup should provide a detailed response to the "Reflection" section of the [project rubric](https://review.udacity.com/#!/rubrics/322/view). There are three parts to the reflection:
+1. Convert the original image to grayscale:
 
-1. Describe the pipeline
+    #grayImage = grayscale(image)
 
-2. Identify any shortcomings
+<img src="test_images_output/grayImage.png" width="480" alt="Combined Image" />
 
-3. Suggest possible improvements
-
-We encourage using images in your writeup to demonstrate how your pipeline works.  
-
-All that said, please be concise!  We're not looking for you to write a book here: just a brief description.
-
-You're not required to use markdown for your writeup.  If you use another method please just submit a pdf of your writeup. Here is a link to a [writeup template file](https://github.com/udacity/CarND-LaneLines-P1/blob/master/writeup_template.md). 
+The original RGB image is converted to grayscale to reduce the color channels. It is easier to process an image this way.
 
 
-The Project
----
+2. Convert the grayscale image to blurred image
 
-## If you have already installed the [CarND Term1 Starter Kit](https://github.com/udacity/CarND-Term1-Starter-Kit/blob/master/README.md) you should be good to go!   If not, you should install the starter kit to get started on this project. ##
+    #blurredImage = gaussian_blur(grayImage, kernel_size)
 
-**Step 1:** Set up the [CarND Term1 Starter Kit](https://classroom.udacity.com/nanodegrees/nd013/parts/fbf77062-5703-404e-b60c-95b78b2f3f9e/modules/83ec35ee-1e02-48a5-bdb7-d244bd47c2dc/lessons/8c82408b-a217-4d09-b81d-1bda4c6380ef/concepts/4f1870e0-3849-43e4-b670-12e6f2d4b7a7) if you haven't already.
+<img src="examples/laneLines_thirdPass.jpg" width="480" alt="Combined Image" />
+Use the gaussian blur function to blur the grascale image. The gaussian blur further reduces the noise in input grayscale image.
 
-**Step 2:** Open the code in a Jupyter Notebook
 
-You will complete the project code in a Jupyter notebook.  If you are unfamiliar with Jupyter Notebooks, check out [Udacity's free course on Anaconda and Jupyter Notebooks](https://classroom.udacity.com/courses/ud1111) to get started.
+3. Find the edges
 
-Jupyter is an Ipython notebook where you can run blocks of code and see results interactively.  All the code for this project is contained in a Jupyter notebook. To start Jupyter in your browser, use terminal to navigate to your project directory and then run the following command at the terminal prompt (be sure you've activated your Python 3 carnd-term1 environment as described in the [CarND Term1 Starter Kit](https://github.com/udacity/CarND-Term1-Starter-Kit/blob/master/README.md) installation instructions!):
+    #edgeImage = canny(blurredImage, low_threshold, high_threshold)
 
-`> jupyter notebook`
+<img src="examples/laneLines_thirdPass.jpg" width="480" alt="Combined Image" />
+A canny edge detector is used to detect strong edges in the blurred image. 
 
-A browser window will appear showing the contents of the current directory.  Click on the file called "P1.ipynb".  Another browser window will appear displaying the notebook.  Follow the instructions in the notebook to complete the project.  
 
-**Step 3:** Complete the project and submit both the Ipython notebook and the project writeup
+4. Region of interest
 
-## How to write a README
-A well written README file can enhance your project and portfolio.  Develop your abilities to create professional README files by completing [this free course](https://www.udacity.com/course/writing-readmes--ud777).
+    #imshape = image.shape
+    #vertices = np.array([[(0,imshape[0]),(500, 270), (imshape[1], imshape[0]), (imshape[1],imshape[0])]], dtype=np.int32)
+    #maskedImage = region_of_interest(edgeImage, vertices)
+
+
+A region of interest is identified in the image where it is probable of finding the lanes. This reduces the computations required on the whole image. All the pixels which do not belong in this region of interest is removed. This is called masked image.
+
+
+
+5. Hough Transformation
+
+    #rho = 1
+    #theta = np.pi/180.0
+    #threshold = 5
+    #min_line_len = 30
+    #max_line_gap = 2
+    #lineImage = hough_lines(maskedImage, rho, theta, threshold, min_line_len, max_line_gap) 
+
+From the masked image, hough transformation is used to find all the line segments in the image. The function returns a blank image(black background) with lanes drawn on it.
+
+
+6. Extending the draw_line function
+
+In order to use the lines returned by the hough transform and draw them on the original image, several modifications were done to the draw_line function which are described below:
+
+
+      #calculate slope and intercept of each line
+      #m = float(y2-y1) / float(x2-x1)
+      #b = float(y1) - float(x1*m)
+            
+      #lines belong to left lane
+      #if x1 < xMidPoint and x2 < xMidPoint:
+        #linesLeft.append(line)
+        #slopeLeft.append(m)
+        #interceptLeft.append(b)
+            
+      #lines belong to right lane    
+      #elif x1 > xMidPoint and x2 > xMidPoint:
+        #linesRight.append(line)
+        #slopeRight.append(m)
+        #interceptRight.append(b)
+            
+      #assign lines to left lane    
+      #else:
+        #linesLeft.append(line)
+        #slopeLeft.append(m)
+        #interceptLeft.append(b)
+
+For each line returned by the hough transform, slope and intercept is calculated. Then, the lines are separated as belonging to left or right lanes depending on whether the value is less than midpoint of the image or greater than the midpoint of the image respectively.
+
+
+       #x1Left = (yMax - meanInterceptLeft)/meanSlopeLeft
+       #y1Left = yMax
+       #x2Left = (yMin - meanInterceptLeft)/meanSlopeLeft
+       #y2Left = yMin
+
+       #x1Right = (yMax - meanInterceptRight)/meanSlopeRight
+       #y1Right = yMax
+       #x2Right = (yMin - meanInterceptRight)/meanSlopeRight
+       #y2Right = yMin
+
+With the help of individual line segments, an extrapolated single line is calculated for each side of the lane. The co-ordinates of such an extrapolated line is calculated as shown above. The line starts from bottom of the image and ends at the pixel defined by yMax.
+
+7. Draw lines on the original RGB Image
+
+The last step is to draw the extrapolated lanes on the original RGB image. 
+
+       #if lineImage is not None:
+         #lastValidLineImage = copy.copy(lineImage)
+         #lastValidImage = copy.copy(originalImage)
+
+Sometimes, it was observed that hough_lines function returned null image, which meant no lines were detected. This is a problem for the video data as every such frame will have only the original image displayed which resulted in poor video output. To overcome this problem, if the line image and original image are found to be valid, they are stored separately as lastKnown images and used whenever there is a null line image returned. 
+
+
+       #if lineImage is None:
+         #print "nonetype found"
+         #finalImage = weighted_img(lastValidLineImage, lastValidImage)
+                   
+       #else:
+         #finalImage = weighted_img(lineImage, image)
+
+Here, the finalImage is the original RGB image with lanes drawn on it. 
+
+
+### 2. Identify potential shortcomings with your current pipeline
+
+
+One of the potential shortcoming would be when the lines detected by the hough transform are on either side of the image midpoint. Currently, they are considered as belonging to left lane.
+
+Changing lanes, left and right turns are not handled.
+
+different weather conditions may change the perspective of the input image which is not handled right now.
+
+Another shortcoming is that, if a vehicle is present in the region of interest the lanes are drawn on them too
+
+
+### 3. Suggest possible improvements to your pipeline
+
+Consider the possible case of lines belonging to either side of the midpoint. Sort them based on how far they are from the midpoint.
+
+Consider tracking of lanes to make the detection smooth.
+
+Give a confidence measure to the detection.
+
+Use color filter as an initial filter along with Region of Interest.
+
+
 
