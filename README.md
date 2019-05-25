@@ -30,7 +30,7 @@ The original RGB image is converted to grayscale to reduce the color channels. I
 
     #blurredImage = gaussian_blur(grayImage, kernel_size)
 
-<img src="examples/laneLines_thirdPass.jpg" width="480" alt="Combined Image" />
+<img src="test_images_output/blurredImage.png" width="480" alt="Combined Image" />
 Use the gaussian blur function to blur the grascale image. The gaussian blur further reduces the noise in input grayscale image.
 
 
@@ -38,7 +38,7 @@ Use the gaussian blur function to blur the grascale image. The gaussian blur fur
 
     #edgeImage = canny(blurredImage, low_threshold, high_threshold)
 
-<img src="examples/laneLines_thirdPass.jpg" width="480" alt="Combined Image" />
+<img src="test_images_output/ledge.png" width="480" alt="Combined Image" />
 A canny edge detector is used to detect strong edges in the blurred image. 
 
 
@@ -107,7 +107,11 @@ For each line returned by the hough transform, slope and intercept is calculated
 
 With the help of individual line segments, an extrapolated single line is calculated for each side of the lane. The co-ordinates of such an extrapolated line is calculated as shown above. The line starts from bottom of the image and ends at the pixel defined by yMax.
 
+
+
 7. Draw lines on the original RGB Image
+
+<img src="test_images_output/solidWhiteCurve.png" width="480" alt="Combined Image" />
 
 The last step is to draw the extrapolated lanes on the original RGB image. 
 
