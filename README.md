@@ -38,7 +38,7 @@ Use the gaussian blur function to blur the grascale image. The gaussian blur fur
 
     #edgeImage = canny(blurredImage, low_threshold, high_threshold)
 
-<img src="test_images_output/ledge.png" width="480" alt="Combined Image" />
+<img src="test_images_output/edge.png" width="480" alt="Combined Image" />
 A canny edge detector is used to detect strong edges in the blurred image. 
 
 
