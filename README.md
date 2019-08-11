@@ -11,131 +11,236 @@ The goals / steps of this project are the following:
 * Build a pipeline to find lane lines on the road in images
 * Use the pipeline to find lane lines on the road in video
 
-### Reflection
+[//]: # (Image References)
 
-### 1. Describing the pipeline
+[im01]: ./test_images/solidWhiteCurve.jpg "Solid White Curve"
+[im02]: ./test_images/solidWhiteRight.jpg "Solid White Right"
+[im03]: ./test_images/solidYellowCurve.jpg "Solid Yellow Curve"
+[im04]: ./test_images/solidYellowCurve2.jpg "Solid Yellow Curve2"
+[im05]: ./test_images/solidYellowLeft.jpg "Solid Yellow Left"
+[im06]: ./test_images/whiteCarLaneSwitch.jpg "White Car Lane Switch"
+
+[im07]: ./test_images_output/solidWhiteCurveRoi.png "Solid White Curve"
+[im08]: ./test_images_output/solidWhiteRightRoi.png "Solid White Right"
+[im09]: ./test_images_output/solidYellowCurveRoi.png "Solid Yellow Curve"
+[im10]: ./test_images_output/solidYellowCurve2Roi.png "Solid Yellow Curve2"
+[im11]: ./test_images_output/solidYellowLeftRoi.png "Solid Yellow Left"
+[im12]: ./test_images_output/whiteCarLaneSwitchRoi.png "White Car Lane Switch"
+
+[im13]: ./test_images_output/solidWhiteCurve.png "Solid White Curve"
+[im14]: ./test_images_output/solidWhiteRight.png "Solid White Right"
+[im15]: ./test_images_output/solidYellowCurve.png "Solid Yellow Curve"
+[im16]: ./test_images_output/solidYellowCurve2.png "Solid Yellow Curve2"
+[im17]: ./test_images_output/solidYellowLeft.png "Solid Yellow Left"
+[im18]: ./test_images_output/whiteCarLaneSwitch.png "White Car Lane Switch"
+
+## 1. Describing the pipeline
 
 The pipeline to find lane lines consists of following steps:
 
-1. Convert the original image to grayscale:
+### Finding prominent line segments
 
-    #grayImage = grayscale(image)
+The first step in the pipeline is to remove unnecessary details in the image and to extract the line segments which would potentially represent the lanes. In this work, I implemented two different ways of extracting the line segments.
 
-<img src="test_images_output/grayImage.png" width="480" alt="Combined Image" />
+#### Extracting the line segments with edge detection
+
+In this approach, the image is first converted to grayscale using
+
+   ```
+   grayscale = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+   
+   ```
 
 The original RGB image is converted to grayscale to reduce the color channels. It is easier to process an image this way.
 
 
 2. Convert the grayscale image to blurred image
 
-    #blurredImage = gaussian_blur(grayImage, kernel_size)
-
-<img src="test_images_output/blurredImage.png" width="480" alt="Combined Image" />
+```
+    blurredImage = gaussian_blur(grayImage, kernel_size)
+```
 Use the gaussian blur function to blur the grascale image. The gaussian blur further reduces the noise in input grayscale image.
 
 
 3. Find the edges
 
-    #edgeImage = canny(blurredImage, low_threshold, high_threshold)
+```
+    edgeImage = canny(blurredImage, low_threshold, high_threshold)
+```
 
-<img src="test_images_output/edge.png" width="480" alt="Combined Image" />
-A canny edge detector is used to detect strong edges in the blurred image. 
+A canny edge detector is used to detect strong edges in the blurred image which could potentially describe the lane lines.
+
+Using this approach, I could farely identify the lines. But, once the lighting conditions and road curvature gets difficult, this approach fails to perform well. I was unable to find lines effectively which resulted in empty lines. 
+
+To improve my implementation, I used another approach,
 
 
-4. Region of interest
+#### Extracting the line segments using Lightness and Saturation channel
 
-    #imshape = image.shape
-    #vertices = np.array([[(0,imshape[0]),(500, 270), (imshape[1], imshape[0]), (imshape[1],imshape[0])]], dtype=np.int32)
-    #maskedImage = region_of_interest(edgeImage, vertices)
+in this approach, I converted the image to HSV image from which I could separate lightness and saturation channels of the image. The lightness channel was found to identify white lines and the saturation channel was found to identify yellow lines better.
+
+Then, I converted the two channels to a binary image with a fixed threshold. Then, I combined the two binary images to get a combined thresholded binary image which identified white and yellow lines more effectively. The code can be found in code block 3.
+
+```
+def getBinaryThresholdL(lChannel, thresh=(200, 255)):
+    binaryImage = np.zeros_like(lChannel)
+    binaryImage[(lChannel > thresh[0]) & (lChannel <= thresh[1])] = 1
+    return binaryImage    
+
+def getBinaryThresholdS(sChannel, thresh=(160, 255)):
+
+    binaryImage = np.zeros_like(sChannel)
+    binaryImage[(sChannel > thresh[0]) & (sChannel <= thresh[1])] = 1
+    return binaryImage
+
+def getCombinedBinaryImage(lChannel, sChannel):
+    # Combine L and S channels
+    combined = np.zeros_like(lChannel)
+    combined[(lChannel == 1) | (sChannel == 1)] = 1  
+    return combined
+    
+```    
+
+### Region of interest
 
 
 A region of interest is identified in the image where it is probable of finding the lanes. This reduces the computations required on the whole image. All the pixels which do not belong in this region of interest is removed. This is called masked image.
 
+    #imshape = image.shape
+    #vertices = np.array([[(0,imshape[0]),(500, 270), (imshape[1], imshape[0]), (imshape[1],imshape[0])]], dtype=np.int32)
+    #maskedImage = region_of_interest(combinedBinaryImage, vertices)
 
 
-5. Hough Transformation
+### Hough Transformation
 
-    #rho = 1
-    #theta = np.pi/180.0
-    #threshold = 5
-    #min_line_len = 30
-    #max_line_gap = 2
-    #lineImage = hough_lines(maskedImage, rho, theta, threshold, min_line_len, max_line_gap) 
 
 From the masked image, hough transformation is used to find all the line segments in the image. The function returns a blank image(black background) with lanes drawn on it.
 
+    rho = 2
+    theta = np.pi/180.0
+    threshold = 65
+    min_line_len = 110
+    max_line_gap = 350
+    #lineImage = hough_lines(maskedImage, rho, theta, threshold, min_line_len, max_line_gap) 
 
-6. Extending the draw_line function
+
+
+### Extending the draw_line function
 
 In order to use the lines returned by the hough transform and draw them on the original image, several modifications were done to the draw_line function which are described below:
 
 
-      #calculate slope and intercept of each line
-      #m = float(y2-y1) / float(x2-x1)
-      #b = float(y1) - float(x1*m)
-            
-      #lines belong to left lane
-      #if x1 < xMidPoint and x2 < xMidPoint:
-        #linesLeft.append(line)
-        #slopeLeft.append(m)
-        #interceptLeft.append(b)
-            
-      #lines belong to right lane    
-      #elif x1 > xMidPoint and x2 > xMidPoint:
-        #linesRight.append(line)
-        #slopeRight.append(m)
-        #interceptRight.append(b)
-            
-      #assign lines to left lane    
-      #else:
-        #linesLeft.append(line)
-        #slopeLeft.append(m)
-        #interceptLeft.append(b)
+The lines from the hough transform are seperated as belonging to left and right lanes by their slope. Negative slopes belong to left lane and positive slopes belong to right lane.
 
-For each line returned by the hough transform, slope and intercept is calculated. Then, the lines are separated as belonging to left or right lanes depending on whether the value is less than midpoint of the image or greater than the midpoint of the image respectively.
+            if slope < 0:
+                left_lines_slope.append(slope)
+                left_lines_intercept.append(intercept)
+                
+            else:
+                right_lines_slope.append(slope)
+                right_lines_intercept.append(intercept)
 
 
-       #x1Left = (yMax - meanInterceptLeft)/meanSlopeLeft
-       #y1Left = yMax
-       #x2Left = (yMin - meanInterceptLeft)/meanSlopeLeft
-       #y2Left = yMin
+In the next step, I removed some outliers in the slope and intercepts to eliminate the jitter and improve the accuracy.
 
-       #x1Right = (yMax - meanInterceptRight)/meanSlopeRight
-       #y1Right = yMax
-       #x2Right = (yMin - meanInterceptRight)/meanSlopeRight
-       #y2Right = yMin
+```
+    #remove outliers from the list of slopes
+    mean_left = np.mean(numpy_left_slopes, axis=0)
+    sd_left = np.std(numpy_left_slopes, axis=0)    
+    final_list_left = [x for x in left_lines_slope if (x > mean_left - 1 * sd_left)]
+    final_list_left = [x for x in final_list_left if (x < mean_left + 1 * sd_left)] 
+```
+In the next step, I calculated the mean of slope and intercepts.
+
+```
+    meanSlopeLeft = sum(final_list_left) / len(final_list_left)
+    meanSlopeRight = sum(final_list_right) / len(final_list_right)
+    
+    meanInterceptLeft = sum(final_list_left_intercept) / len(final_list_left_intercept)
+    meanInterceptRight = sum(final_list_right_intercept) / len(final_list_right_intercept)
+```
 
 With the help of individual line segments, an extrapolated single line is calculated for each side of the lane. The co-ordinates of such an extrapolated line is calculated as shown above. The line starts from bottom of the image and ends at the pixel defined by yMax.
 
+```
+    x1Left = (yMax - meanInterceptLeft)/meanSlopeLeft
+    y1Left = yMax
+    x2Left = (yMin - meanInterceptLeft)/meanSlopeLeft)
+    y2Left = yMin
+    x1Right = (yMax - meanInterceptRight)/meanSlopeRight
+    y1Right = yMax
+    x2Right = (yMin - meanInterceptRight)/meanSlopeRight
+    y2Right = yMin
+```        
 
 
-7. Draw lines on the original RGB Image
+### Draw lines on the original RGB Image
 
-<img src="test_images_output/solidWhiteCurve.png" width="480" alt="Combined Image" />
+The last step is to draw the extrapolated lanes on the original RGB image. The code for this stage can be found in code block 5.
 
-The last step is to draw the extrapolated lanes on the original RGB image. 
+The figures below shows original image, the ROI image and the image with lane lines drawn for the test images provided.
 
-       #if lineImage is not None:
-         #lastValidLineImage = copy.copy(lineImage)
-         #lastValidImage = copy.copy(originalImage)
+|Original Image | ROI Image | Lane Image |
+|:---:|:---:|:---:|
+| ![alt text][im01] | ![alt text][im07] | ![alt text][im13] |
+| ![alt text][im02] | ![alt text][im08] | ![alt text][im14] |
+| ![alt text][im03] | ![alt text][im09] | ![alt text][im15] |
+| ![alt text][im04] | ![alt text][im10] | ![alt text][im16] |
+| ![alt text][im05] | ![alt text][im11] | ![alt text][im17] |
+| ![alt text][im06] | ![alt text][im12] | ![alt text][im18] |
 
-Sometimes, it was observed that hough_lines function returned null image, which meant no lines were detected. This is a problem for the video data as every such frame will have only the original image displayed which resulted in poor video output. To overcome this problem, if the line image and original image are found to be valid, they are stored separately as lastKnown images and used whenever there is a null line image returned. 
+### Video Pipeline
 
+For the videos provided, I had to make more changes to the draw line function in order to process the video and output the data without too much jitter. Here are the changes I made.
 
-       #if lineImage is None:
-         #print "nonetype found"
-         #finalImage = weighted_img(lastValidLineImage, lastValidImage)
-                   
-       #else:
-         #finalImage = weighted_img(lineImage, image)
+#### Introducing Lines Class
 
-Here, the finalImage is the original RGB image with lanes drawn on it. 
+I implemented a class to hold certain properties of the hough lines. The class looks as shown.
+
+```
+class Lines():
+    def __init__(self):
+        
+        self.best_coordinates_exist = False
+        
+        self.best_mean_slope_left = 0 
+        self.best_mean_slope_right = 0
+        
+        self.best_mean_intercept_left = 0
+        self.best_mean_intercept_right = 0
+        
+        self.previous_lines_slope_left = []   
+        self.previous_lines_slope_right = []
+        
+        self.previous_lines_intercept_left = []   
+        self.previous_lines_intercept_right = []
+```        
+
+#### Introducing memory
+
+In order for the video to be stable, I did not calculate the hough transform for every frame. I drew the line with the first set of lines and stored the co-ordinates. Only if a large deviation in the slope was found in the successive frames, I recalculated the hough transform and updated the co-ordinates the new line. 
+
+#### Averaging slope and intercept over 'n' frames
+
+In order to make the calculated slope and intercept robust, I stored the slopes and intercept for last n frames and averaged them for the result. This resulted in better and more robust line co-ordinates.
+
+```
+#store upto 70 previous lines
+if len(self.previous_lines_slope_left) > 70:
+    self.previous_lines_slope_left = self.previous_lines_slope_left[len(self.previous_lines_slope_left) - 70:]
+
+if len(self.previous_lines_slope_right) > 70:    
+    self.previous_lines_slope_right = self.previous_lines_slope_right[len(self.previous_lines_slope_right) - 70:]
+
+```
 
 
 ### 2. Identify potential shortcomings with your current pipeline
 
 
-One of the potential shortcoming would be when the lines detected by the hough transform are on either side of the image midpoint. Currently, they are considered as belonging to left lane.
+One of the potential shortcoming would be when the lighting conditions in the image changes. This makes it difficult for the lightness and saturation channels to extract the lines effectively.
+
+During my observation in the video, sometimes the line drawn has a tendancy to deviate too much from the mean. This could be because of the sudden and short change in the conditions which is not currently handled.
 
 Changing lanes, left and right turns are not handled.
 
@@ -146,13 +251,13 @@ Another shortcoming is that, if a vehicle is present in the region of interest t
 
 ### 3. Suggest possible improvements to your pipeline
 
-Consider the possible case of lines belonging to either side of the midpoint. Sort them based on how far they are from the midpoint.
+A possible improvement would be to optimize the calculation of slopes, intercepts and co-ordinates. This would result in faster processing of the frame.
 
-Consider tracking of lanes to make the detection smooth.
+Improve the tracking of lines by a more sophisticated approach.
 
 Give a confidence measure to the detection.
 
-Use color filter as an initial filter along with Region of Interest.
+Use other color filters like HLS as an initial filter along with Region of Interest.
 
 
 
